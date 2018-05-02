@@ -1,8 +1,57 @@
-# -*- coding: utf-8 -*-
-# https://blog.csdn.net/mr_tyting/article/details/75212250
+"""
+评分卡特征分箱工具
+https://blog.csdn.net/mr_tyting/article/details/75212250
+"""
 import pandas as pd
 import numpy as np
 
+
+def calcCut(df, col, target, cutPoints, output_type='dataframe'):
+    """
+    :param df: 
+    :param col: splitted column
+    :param target: 
+    :param cutPoints: cutPoints
+    :param output_type: dtaframe or dict
+    :return res, discrete_df: 返回woe的信息, 离散化之后的列, 便于做woe trans  
+    """
+
+    # 补齐首尾便于cut
+    if cutPoints[0] == df[col].min():
+        cutPoints = [*cutPoints, np.inf]
+    else:
+        cutPoints = [0, *cutPoints, np.inf]
+    labels = genLabels(cutPoints)
+
+    discrete_df = pd.DataFrame()   # 离散化的新df
+
+
+    binName = "%s_Bins" % col  # 为离散化的列附上新名称
+
+    discrete_df[binName] = pd.cut(df[col], cutPoints, labels=labels, right=False)
+    discrete_df[target] = df[target].copy()
+
+    if output_type == 'dataframe':  # True：返回WOE的dataframe, 便于在excel中分析
+        res = CalcWOE(discrete_df, binName, target=target, output_type=output_type)
+        return res, discrete_df
+
+    elif output_type == 'dict':  # False: 返回dict, 便于后续的实施
+        res = CalcWOE(discrete_df, binName, target=target, output_type=output_type)
+        res['CUTPOINTS'] = cutPoints
+        return res, discrete_df 
+    else:
+        return
+
+
+def genLabels(cutOffPoints):
+    """
+    将最优分箱点，生成list作为label
+    """
+    labels = []
+    for i in range(len(cutOffPoints) - 1):
+        interval = (cutOffPoints[i], cutOffPoints[i+1])
+        labels.append(str(interval))
+    return labels
 
 def Chi2(df, total_col, bad_col, overallRate):
     """
@@ -79,7 +128,7 @@ def ChiMerge_MaxInterval_Original(df, col, target, max_interval = 5):
         return cutOffPoints
 
 
-def CalcWOE(df, col, target):
+def CalcWOE(df, col, target, output_type='dataframe'):
     '''
     :param df: dataframe containing feature and target
     :param col: 注意col这列已经经过分箱了，现在计算每箱的WOE和总的IV。
@@ -100,15 +149,21 @@ def CalcWOE(df, col, target):
     regroup['good_pct'] = regroup['good'].map(lambda x: x * 1.0 / G)
     regroup['PctRec'] = regroup['total'].map(lambda x: x * 1.0 / N)
     regroup['WOE'] = regroup.apply(lambda x: np.log(x.good_pct*1.0/(x.bad_pct+0.001)),axis = 1)  # 防止zerodivision错误
-    # WOE_dict = regroup[[col,'WOE']].set_index(col).to_dict(orient='index')
-    # IV = regroup.apply(lambda x: (x.good_pcnt-x.bad_pcnt)*np.log(x.good_pcnt*1.0/x.bad_pcnt),axis = 1)
     regroup['ori_iv'] = regroup.apply(lambda x: (x.good_pct-x.bad_pct)*np.log(x.good_pct*1.0/(x.bad_pct+0.001)),axis = 1)
     regroup['sum_iv'] = sum(regroup['ori_iv'])
-    # IV = sum(IV)
     regroup.rename(index=str, columns={col: 'interval'}, inplace=True)
-    return regroup
-    # return {"WOE": WOE_dict, 'IV':IV}
+    if output_type == 'dict':
 
+        WOE_dict = regroup[['interval','WOE']].set_index('interval').to_dict(orient='index')
+        # IV = regroup.apply(lambda x: (x.good_pcnt-x.bad_pcnt)*np.log(x.good_pcnt*1.0/x.bad_pcnt),axis = 1)
+        IV = sum(regroup['ori_iv'])
+        return {"WOE": WOE_dict, 'IV':IV}
+    elif output_type == 'dataframe':
+        return regroup
+        # return {"WOE": WOE_dict, 'IV':IV}
+
+    else:
+        return
 
 def AssignBin(x, cutOffPoints):
     '''
