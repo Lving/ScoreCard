@@ -13,7 +13,8 @@ def calcCut(df, col, target, cutPoints, output_type='dataframe'):
     :param target: 
     :param cutPoints: cutPoints
     :param output_type: dtaframe or dict
-    :return res, discrete_df: 返回woe的信息, 离散化之后的列, 便于做woe trans  
+    :return res, discrete_df: 返回woe的信息, 离散化之后的列, 便于做woe trans
+    woe的信息可以选择以dataframe或者dict的形式输出
     """
 
     # 补齐首尾便于cut
