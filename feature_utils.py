@@ -1,7 +1,5 @@
-"""
-评分卡特征分箱工具
-https://blog.csdn.net/mr_tyting/article/details/75212250
-"""
+# -*- coding: utf-8 -*-
+# https://blog.csdn.net/mr_tyting/article/details/75212250
 import pandas as pd
 import numpy as np
 
@@ -13,24 +11,26 @@ def calcCut(df, col, target, cutPoints, output_type='dataframe'):
     :param target: 
     :param cutPoints: cutPoints
     :param output_type: dtaframe or dict
-    :return res, discrete_df: 返回woe的信息, 离散化之后的列, 便于做woe trans
-    woe的信息可以选择以dataframe或者dict的形式输出
+    :return res, discrete_df: 返回woe的信息, 离散化之后的列, 便于做woe trans  
     """
 
-    # 补齐首尾便于cut
-    if cutPoints[0] == df[col].min():
-        cutPoints = [*cutPoints, np.inf]
-    else:
-        cutPoints = [0, *cutPoints, np.inf]
-    labels = genLabels(cutPoints)
-
     discrete_df = pd.DataFrame()   # 离散化的新df
-
+    discrete_df[target] = df[target].copy()
 
     binName = "%s_Bins" % col  # 为离散化的列附上新名称
 
-    discrete_df[binName] = pd.cut(df[col], cutPoints, labels=labels, right=False)
-    discrete_df[target] = df[target].copy()
+    if cutPoints is None:  # 非连续变量， 或者不用分箱的变量
+        discrete_df[binName] = df[col].copy()
+
+    else:
+        # 补齐首尾便于cut
+        if cutPoints[0] == df[col].min():
+            cutPoints = [*cutPoints, np.inf]
+        else:
+            cutPoints = [0, *cutPoints, np.inf]
+        cutPoints = sorted(list(set(cutPoints)))
+        labels = genLabels(cutPoints)
+        discrete_df[binName] = pd.cut(df[col], cutPoints, labels=labels, right=False)
 
     if output_type == 'dataframe':  # True：返回WOE的dataframe, 便于在excel中分析
         res = CalcWOE(discrete_df, binName, target=target, output_type=output_type)
@@ -79,9 +79,17 @@ def ChiMerge_MaxInterval_Original(df, col, target, max_interval = 5):
     :param max_interval: the maximum number of intervals. If the raw column has attributes less than this parameter, the function will not work
     :return: the combined bins
     """
-    # 太多的小数点影响速度， 保留一位
+ 
     #colLevels = set(df[col])
-    colLevels = set(df[col].round(1))
+    # 更新： 采用分位点来提升速度
+    pctl = set(range(0, 105, 5))  # percentile
+    colsets = set(df[col].round(1))  # 太多的小数点影响速度， 保留一位
+
+    if len(colsets) > len(pctl) * 10:  # 远远大于
+        colLevels = [np.percentile(df[col], p) for p in pctl]
+    else:
+        colLevels = colsets 
+
     colLevels = sorted(list(colLevels)) # 先对这列数据进行排序，然后在计算分箱
     N_distinct = len(colLevels)
     if N_distinct <= max_interval:  #If the raw column has attributes less than this parameter, the function will not work
